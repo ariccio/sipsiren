@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>SipSiren — Drink Your Water Or Else</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    :root {
+      --bg: #070b14;
+      --panel: #101727;
+      --border: #1e293b;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: #f8fafc;
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    /* Alarm red pulse around the viewport */
+    @keyframes alarmGlow {
+      0%, 100% {
+        box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.85), 0 0 28px rgba(244, 63, 94, 0.45);
+      }
+      50% {
+        box-shadow: 0 0 0 4px rgba(244, 63, 94, 1), 0 0 48px rgba(244, 63, 94, 0.75);
+      }
+    }
+
+    @keyframes sipGlow {
+      0%, 100% {
+        box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.9), 0 0 26px rgba(6, 182, 212, 0.45);
+      }
+      50% {
+        box-shadow: 0 0 0 3px rgba(34, 211, 238, 1), 0 0 40px rgba(34, 211, 238, 0.7);
+      }
+    }
+
+    @keyframes victoryGlow {
+      0%, 100% {
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.9), 0 0 30px rgba(16, 185, 129, 0.45);
+      }
+      50% {
+        box-shadow: 0 0 0 4px rgba(52, 211, 153, 1), 0 0 44px rgba(52, 211, 153, 0.65);
+      }
+    }
+
+    .stage-alarm {
+      animation: alarmGlow 0.7s ease-in-out infinite;
+    }
+
+    .stage-sipping {
+      animation: sipGlow 1.1s ease-in-out infinite;
+    }
+
+    .stage-victory {
+      animation: victoryGlow 1.6s ease-in-out infinite;
+    }
+
+    /* Water wave animation inside the vessel SVG */
+    @keyframes waveSlide {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .water-wave {
+      animation: waveSlide 2.6s linear infinite;
+    }
+
+    /* Custom range slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #1e293b;
+      height: 6px;
+      border-radius: 9999px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #06b6d4;
+      cursor: pointer;
+      border: 2px solid #0f172a;
+      box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.35);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #06b6d4;
+      cursor: pointer;
+      border: 2px solid #0f172a;
+    }
+
+    .mirror-video {
+      transform: scaleX(-1);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <!-- Top Header -->
+  <header class="sticky top-0 z-30 border-b border-slate-800/90 bg-slate-950/90 backdrop-blur-md">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
+          <i data-lucide="droplets" class="w-5 h-5 text-slate-950"></i>
+        </div>
+        <div class="min-w-0">
+          <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-white leading-tight truncate">SipSiren</h1>
+          <p class="text-[11px] sm:text-xs text-slate-400 truncate">No peace until the glass is empty</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-semibold text-cyan-300">
+          <i data-lucide="flame" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span id="streak-badge">0 bottles finished</span>
+        </div>
+        <button id="btn-how-it-works" type="button" class="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-xs font-semibold text-slate-200 transition flex items-center gap-1.5">
+          <i data-lucide="help-circle" class="w-3.5 h-3.5 text-cyan-400"></i>
+          <span>How it works</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Toast Banner -->
+  <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-[92%] max-w-md flex flex-col items-center gap-2"></div>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+    <!-- Left / Top: Camera + Water Gauge Stage -->
+    <section class="lg:col-span-7 flex flex-col gap-4">
+      <!-- Status Bar -->
+      <div id="status-banner" class="rounded-2xl border border-slate-800 bg-slate-900/90 px-4 py-3 flex items-center justify-between gap-3 transition-colors">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-slate-500 shrink-0"></span>
+          <div class="min-w-0">
+            <p id="status-title" class="text-sm font-bold text-white truncate">Ready to supervise hydration</p>
+            <p id="status-subtitle" class="text-xs text-slate-400 truncate">Choose your vessel &amp; alarm, then hit Start Watching.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span id="escalation-badge" class="hidden px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-500/50 text-[11px] font-bold text-rose-300">
+            ESCALATING x1.0
+          </span>
+          <span id="timer-display" class="font-mono text-sm font-bold text-slate-200 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">00:00</span>
+        </div>
+      </div>
+
+      <!-- Camera / Demo Viewport -->
+      <div id="stage-frame" class="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 aspect-[4/3] w-full transition-shadow">
+        <!-- Real Webcam Video -->
+        <video id="webcam-video" playsinline autoplay muted class="hidden w-full h-full object-cover mirror-video"></video>
+        <!-- Demo Cam Canvas (also used when webcam isn't available) -->
+        <canvas id="demo-canvas" class="w-full h-full block"></canvas>
+        <!-- Hidden Processing Canvas for CV pixel analysis -->
+        <canvas id="cv-canvas" width="160" height="120" class="hidden"></canvas>
+
+        <!-- HUD Overlay -->
+        <div class="absolute inset-0 pointer-events-none flex flex-col justify-between p-3 sm:p-4">
+          <!-- Top HUD Row -->
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span id="camera-mode-pill" class="px-2.5 py-1 rounded-full bg-slate-950/80 backdrop-blur border border-slate-700/80 text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                <span id="camera-mode-label">Camera Standby</span>
+              </span>
+              <span id="alarm-pill" class="hidden px-2.5 py-1 rounded-full bg-rose-600/90 text-[11px] font-extrabold tracking-wide text-white uppercase flex items-center gap-1 shadow-lg">
+                <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+                <span>ALARM ON</span>
+              </span>
+            </div>
+
+            <!-- Interactive camera controls (pointer-events-auto) -->
+            <div class="pointer-events-auto flex items-center gap-1.5">
+              <button id="btn-flip-camera" type="button" title="Switch Front/Back Camera" class="hidden p-2 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/80 text-slate-200 transition">
+                <i data-lucide="switch-camera" class="w-4 h-4"></i>
+              </button>
+              <button id="btn-toggle-source" type="button" class="px-2.5 py-1.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/80 text-[11px] font-semibold text-cyan-300 transition flex items-center gap-1.5">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                <span id="toggle-source-text">Use Demo Cam</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Center Sip Zone Reticle -->
+          <div class="flex items-center justify-center my-auto">
+            <div id="sip-zone-box" class="w-[54%] max-w-[260px] aspect-[5/4] rounded-2xl border-2 border-dashed border-cyan-400/60 bg-cyan-500/5 flex flex-col items-center justify-between p-2 transition-all duration-150">
+              <span id="sip-zone-tag" class="px-2 py-0.5 rounded bg-slate-950/85 text-[10px] font-extrabold uppercase tracking-wider text-cyan-300">
+                SIP ZONE — RAISE BOTTLE HERE
+              </span>
+              <div id="sip-zone-center-msg" class="text-center px-2">
+                <p id="sip-zone-prompt" class="text-xs sm:text-sm font-bold text-white drop-shadow">Position face &amp; cup inside box</p>
+              </div>
+              <div class="w-full h-1.5 rounded-full bg-slate-950/80 overflow-hidden">
+                <div id="motion-meter-fill" class="h-full w-0 bg-cyan-400 transition-all duration-75"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom HUD Row: Live Liquid Progress Bar -->
+          <div class="bg-slate-950/85 backdrop-blur-md border border-slate-800/90 rounded-xl p-2.5 sm:p-3">
+            <div class="flex items-center justify-between text-xs mb-1.5">
+              <span class="font-bold text-slate-200 flex items-center gap-1.5">
+                <i data-lucide="glass-water" class="w-3.5 h-3.5 text-cyan-400"></i>
+                <span id="progress-label">0 / 500 ml drunk</span>
+              </span>
+              <span id="progress-pct" class="font-mono font-extrabold text-cyan-300">0%</span>
+            </div>
+            <div class="w-full h-3 rounded-full bg-slate-800 overflow-hidden">
+              <div id="progress-bar-fill" class="h-full w-0 bg-gradient-to-r from-cyan-500 via-sky-400 to-emerald-400 transition-all duration-150"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Victory Overlay -->
+        <div id="victory-overlay" class="hidden absolute inset-0 bg-slate-950/88 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20">
+          <div class="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center mb-3">
+            <i data-lucide="trophy" class="w-9 h-9 text-emerald-400"></i>
+          </div>
+          <h2 class="text-2xl sm:text-3xl font-black text-white mb-1">SILENCE EARNED!</h2>
+          <p id="victory-summary" class="text-sm text-slate-300 max-w-sm mb-5">You finished the entire 500 ml bottle in 00:24. The alarm is finally off.</p>
+          <div class="flex flex-wrap items-center justify-center gap-2.5">
+            <button id="btn-drink-again" type="button" class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-sm transition shadow-lg shadow-emerald-500/25 flex items-center gap-2">
+              <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+              <span>Drink Another</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Primary Action Bar -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+        <button id="btn-start-stop" type="button" class="flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white font-extrabold text-base shadow-lg shadow-rose-500/25 transition active:scale-[0.99] flex items-center justify-center gap-2">
+          <i data-lucide="siren" class="w-5 h-5"></i>
+          <span id="btn-start-label">Start Watching &amp; Sound Alarm</span>
+        </button>
+
+        <!-- Hold-to-Sip Assist / Demo Control -->
+        <button id="btn-hold-sip" type="button" class="py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 font-bold text-sm transition select-none flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+          <i data-lucide="cup-soda" class="w-4 h-4"></i>
+          <span>Hold to Sip <span class="hidden sm:inline text-xs text-slate-400 font-normal">(Space)</span></span>
+        </button>
+      </div>
+
+      <!-- Live Telemetry Row -->
+      <div class="grid grid-cols-3 gap-2.5">
+        <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex items-center justify-between gap-2">
+          <div>
+            <p class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Remaining</p>
+            <p id="stat-remaining" class="text-lg font-extrabold text-white font-mono">500 ml</p>
+          </div>
+          <!-- Animated Mini Bottle SVG -->
+          <svg viewBox="0 0 36 56" class="w-7 h-11 shrink-0" aria-hidden="true">
+            <defs>
+              <clipPath id="bottle-clip">
+                <path d="M12 4 h12 v7 l5 7 v32 a4 4 0 0 1 -4 4 h-14 a4 4 0 0 1 -4 -4 v-32 l5 -7 z" />
+              </clipPath>
+            </defs>
+            <path d="M12 4 h12 v7 l5 7 v32 a4 4 0 0 1 -4 4 h-14 a4 4 0 0 1 -4 -4 v-32 l5 -7 z" fill="#0f172a" stroke="#334155" stroke-width="2" />
+            <g clip-path="url(#bottle-clip)">
+              <rect id="svg-water-rect" x="0" y="10" width="36" height="46" fill="#06b6d4" />
+            </g>
+            <rect x="11" y="1" width="14" height="4" rx="1.5" fill="#475569" />
+          </svg>
+        </div>
+
+        <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3">
+          <p class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Active Sipping</p>
+          <p id="stat-sip-time" class="text-lg font-extrabold text-cyan-300 font-mono">0.0s</p>
+        </div>
+
+        <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3">
+          <p class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Stall Time</p>
+          <p id="stat-stall-time" class="text-lg font-extrabold text-rose-400 font-mono">0.0s</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right / Bottom: Configuration & Soundboard -->
+    <aside class="lg:col-span-5 flex flex-col gap-4">
+      <!-- 1. Vessel Size -->
+      <div class="rounded-2xl bg-slate-900/90 border border-slate-800 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="cup-soda" class="w-4 h-4 text-cyan-400"></i>
+            1. What is she drinking?
+          </h2>
+          <span id="target-duration-hint" class="text-xs font-semibold text-cyan-300">~16s of sipping</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 mb-3" id="vessel-grid">
+          <button type="button" data-vessel="glass" class="vessel-btn rounded-xl p-2.5 border border-slate-700 bg-slate-950/70 hover:border-cyan-500/60 text-left transition">
+            <div class="text-lg mb-0.5">🥛</div>
+            <div class="text-xs font-bold text-white">Glass</div>
+            <div class="text-[11px] text-slate-400">250 ml · 10s</div>
+          </button>
+          <button type="button" data-vessel="bottle" class="vessel-btn rounded-xl p-2.5 border-2 border-cyan-400 bg-cyan-500/10 text-left transition">
+            <div class="text-lg mb-0.5">🧴</div>
+            <div class="text-xs font-bold text-white">Bottle</div>
+            <div class="text-[11px] text-cyan-300">500 ml · 16s</div>
+          </button>
+          <button type="button" data-vessel="tumbler" class="vessel-btn rounded-xl p-2.5 border border-slate-700 bg-slate-950/70 hover:border-cyan-500/60 text-left transition">
+            <div class="text-lg mb-0.5">🥤</div>
+            <div class="text-xs font-bold text-white">Tumbler</div>
+            <div class="text-[11px] text-slate-400">750 ml · 24s</div>
+          </button>
+        </div>
+
+        <div class="pt-2 border-t border-slate-800/80">
+          <div class="flex items-center justify-between text-xs mb-1.5">
+            <label for="slider-duration" class="text-slate-400 font-medium">Sipping time required to finish</label>
+            <span id="label-duration" class="font-mono font-bold text-white">16 sec</span>
+          </div>
+          <input id="slider-duration" type="range" min="5" max="45" step="1" value="16" class="w-full" />
+        </div>
+      </div>
+
+      <!-- 2. Annoying Sound Picker -->
+      <div class="rounded-2xl bg-slate-900/90 border border-slate-800 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="volume-2" class="w-4 h-4 text-rose-400"></i>
+            2. Choose the Annoying Sound
+          </h2>
+          <button id="btn-test-sound" type="button" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-rose-300 transition flex items-center gap-1">
+            <i data-lucide="play" class="w-3 h-3"></i>
+            <span>Test 1.5s</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 gap-2" id="sound-list">
+          <button type="button" data-sound="klaxon" class="sound-btn flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border-2 border-rose-500 bg-rose-500/10 text-left transition">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-lg shrink-0">🚨</span>
+              <div class="min-w-0">
+                <p class="text-xs font-bold text-white truncate">Smoke Detector + Klaxon</p>
+                <p class="text-[11px] text-slate-400 truncate">Piercing chirp + dissonant horn</p>
+              </div>
+            </div>
+            <span class="sound-active-badge text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-rose-500 text-white shrink-0">Selected</span>
+          </button>
+
+          <button type="button" data-sound="mosquito" class="sound-btn flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-600 text-left transition">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-lg shrink-0">🦟</span>
+              <div class="min-w-0">
+                <p class="text-xs font-bold text-white truncate">Mosquito Swarm Whine</p>
+                <p class="text-[11px] text-slate-400 truncate">Modulating high-pitched ear buzz</p>
+              </div>
+            </div>
+            <span class="sound-active-badge hidden text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-rose-500 text-white shrink-0">Selected</span>
+          </button>
+
+          <button type="button" data-sound="caralarm" class="sound-btn flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-600 text-left transition">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-lg shrink-0">🚗</span>
+              <div class="min-w-0">
+                <p class="text-xs font-bold text-white truncate">3 AM Car Alarm</p>
+                <p class="text-[11px] text-slate-400 truncate">Cycles through 4 classic siren patterns</p>
+              </div>
+            </div>
+            <span class="sound-active-badge hidden text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-rose-500 text-white shrink-0">Selected</span>
+          </button>
+
+          <button type="button" data-sound="kazoo" class="sound-btn flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-600 text-left transition">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-lg shrink-0">🎺</span>
+              <div class="min-w-0">
+                <p class="text-xs font-bold text-white truncate">Out-of-Tune Kazoo Honk</p>
+                <p class="text-[11px] text-slate-400 truncate">Nasal, wobbly, deeply irritating</p>
+              </div>
+            </div>
+            <span class="sound-active-badge hidden text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-rose-500 text-white shrink-0">Selected</span>
+          </button>
+
+          <button type="button" data-sound="nag" class="sound-btn flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-600 text-left transition">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-lg shrink-0">🗣️</span>
+              <div class="min-w-0">
+                <p class="text-xs font-bold text-white truncate">Passive-Aggressive Nag</p>
+                <p class="text-[11px] text-slate-400 truncate">Spoken reminders + annoying beep</p>
+              </div>
+            </div>
+            <span class="sound-active-badge hidden text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-rose-500 text-white shrink-0">Selected</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. Rules & Tuning -->
+      <div class="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 flex flex-col gap-3.5">
+        <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+          <i data-lucide="sliders-horizontal" class="w-4 h-4 text-cyan-400"></i>
+          3. Alarm Rules &amp; Camera Tuning
+        </h2>
+
+        <!-- Alarm Mode -->
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" id="mode-relentless" class="px-3 py-2 rounded-xl border-2 border-rose-500 bg-rose-500/10 text-left transition">
+            <p class="text-xs font-bold text-white">Relentless</p>
+            <p class="text-[10px] text-slate-300">Sounds non-stop until 100% empty</p>
+          </button>
+          <button type="button" id="mode-mercy" class="px-3 py-2 rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-600 text-left transition">
+            <p class="text-xs font-bold text-white">Sip-to-Mute</p>
+            <p class="text-[10px] text-slate-400">Pauses only while actively sipping</p>
+          </button>
+        </div>
+
+        <!-- Escalate Toggle -->
+        <label class="flex items-center justify-between gap-3 cursor-pointer">
+          <div>
+            <p class="text-xs font-bold text-white">Escalate when stalling</p>
+            <p class="text-[11px] text-slate-400">Gets faster &amp; higher-pitched if she stops drinking</p>
+          </div>
+          <input id="toggle-escalate" type="checkbox" checked class="w-4 h-4 accent-rose-500 rounded cursor-pointer" />
+        </label>
+
+        <!-- Volume Slider -->
+        <div>
+          <div class="flex items-center justify-between text-xs mb-1">
+            <label for="slider-volume" class="text-slate-300 font-medium">Alarm Volume</label>
+            <span id="label-volume" class="font-mono font-bold text-rose-300">55%</span>
+          </div>
+          <input id="slider-volume" type="range" min="10" max="100" step="5" value="55" class="w-full" />
+        </div>
+
+        <!-- Sensitivity Slider -->
+        <div>
+          <div class="flex items-center justify-between text-xs mb-1">
+            <label for="slider-sensitivity" class="text-slate-300 font-medium">Camera Sip Sensitivity</label>
+            <span id="label-sensitivity" class="font-mono font-bold text-cyan-300">Medium (60%)</span>
+          </div>
+          <input id="slider-sensitivity" type="range" min="15" max="95" step="5" value="60" class="w-full" />
+        </div>
+
+        <!-- Reset / Give Up -->
+        <div class="pt-1 flex items-center justify-between gap-2">
+          <button id="btn-give-up" type="button" class="hidden w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition flex items-center justify-center gap-1.5">
+            <i data-lucide="flag" class="w-3.5 h-3.5 text-rose-400"></i>
+            <span>Give Up &amp; Silence Alarm (Shame)</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- How It Works Modal -->
+  <div id="modal-help" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 shadow-2xl">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-base font-extrabold text-white flex items-center gap-2">
+          <i data-lucide="droplets" class="w-5 h-5 text-cyan-400"></i>
+          How SipSiren Works
+        </h3>
+        <button id="btn-close-help" type="button" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <ol class="space-y-2.5 text-xs sm:text-sm text-slate-300 list-decimal pl-4">
+        <li><strong class="text-white">Pick the vessel &amp; sound:</strong> Select glass, bottle, or tumbler (or dial in exact sipping seconds) and audition an annoying sound.</li>
+        <li><strong class="text-white">Hit Start Watching:</strong> SipSiren opens the camera (all processing stays 100% on-device) and starts the alarm right away.</li>
+        <li><strong class="text-white">Drink inside the Sip Zone:</strong> Raising the bottle/glass to her mouth inside the dashed box drains the water meter.</li>
+        <li><strong class="text-white">No camera? No problem:</strong> Click <em>Use Demo Cam</em> (or hold the <em>Hold to Sip</em> button / Spacebar) to test the full experience anywhere.</li>
+      </ol>
+      <button id="btn-got-it" type="button" class="mt-4 w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-sm transition">
+        Got it — let's hydrate
+      </button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ============================================================
+      // STATE
+      // ============================================================
+      const VESSELS = {
+        glass:   { name: 'Glass',   ml: 250, seconds: 10 },
+        bottle:  { name: 'Bottle',  ml: 500, seconds: 16 },
+        tumbler: { name: 'Tumbler', ml: 750, seconds: 24 },
+      };
+
+      const NAG_LINES = [
+        'Drink your water.',
+        'Still not empty. Keep going.',
+        'Hydrate right now.',
+        'That bottle is not going to drink itself.',
+        'Take another sip. I can do this all day.',
+        'Your cells are literally begging for water.',
+        'Almost there. Do not put it down.'
+      ];
+
+      const state = {
+        running: false,
+        finished: false,
+        vesselKey: 'bottle',
+        targetMl: 500,
+        targetSeconds: 16,
+        drunkSeconds: 0,
+        elapsedSeconds: 0,
+        stallSeconds: 0,
+        escalation: 1.0,
+        soundType: 'klaxon',
+        alarmMode: 'relentless', // 'relentless' | 'mercy'
+        escalateOnStall: true,
+        volume: 0.55,
+        sensitivity: 60, // 15..95
+        useDemoCam: false,
+        facingMode: 'user',
+        cameraActive: false,
+        isSipping: false,
+        manualSipHeld: false,
+        motionLevel: 0, // 0..100
+        bottlesFinished: 0,
+      };
+
+      // Load saved streak safely
+      try {
+        const saved = localStorage.getItem('sipsiren_streak');
+        if (saved && !Number.isNaN(Number(saved))) {
+          state.bottlesFinished = Math.max(0, parseInt(saved, 10));
+        }
+      } catch (e) {}
+
+      // ============================================================
+      // DOM ELEMENTS
+      // ============================================================
+      const el = {
+        streakBadge: document.getElementById('streak-badge'),
+        statusBanner: document.getElementById('status-banner'),
+        statusDot: document.getElementById('status-dot'),
+        statusTitle: document.getElementById('status-title'),
+        statusSubtitle: document.getElementById('status-subtitle'),
+        escalationBadge: document.getElementById('escalation-badge'),
+        timerDisplay: document.getElementById('timer-display'),
+        stageFrame: document.getElementById('stage-frame'),
+        webcamVideo: document.getElementById('webcam-video'),
+        demoCanvas: document.getElementById('demo-canvas'),
+        cvCanvas: document.getElementById('cv-canvas'),
+        cameraModeLabel: document.getElementById('camera-mode-label'),
+        alarmPill: document.getElementById('alarm-pill'),
+        btnFlipCamera: document.getElementById('btn-flip-camera'),
+        btnToggleSource: document.getElementById('btn-toggle-source'),
+        toggleSourceText: document.getElementById('toggle-source-text'),
+        sipZoneBox: document.getElementById('sip-zone-box'),
+        sipZoneTag: document.getElementById('sip-zone-tag'),
+        sipZonePrompt: document.getElementById('sip-zone-prompt'),
+        motionMeterFill: document.getElementById('motion-meter-fill'),
+        progressLabel: document.getElementById('progress-label'),
+        progressPct: document.getElementById('progress-pct'),
+        progressBarFill: document.getElementById('progress-bar-fill'),
+        victoryOverlay: document.getElementById('victory-overlay'),
+        victorySummary: document.getElementById('victory-summary'),
+        btnDrinkAgain: document.getElementById('btn-drink-again'),
+        btnStartStop: document.getElementById('btn-start-stop'),
+        btnStartLabel: document.getElementById('btn-start-label'),
+        btnHoldSip: document.getElementById('btn-hold-sip'),
+        statRemaining: document.getElementById('stat-remaining'),
+        statSipTime: document.getElementById('stat-sip-time'),
+        statStallTime: document.getElementById('stat-stall-time'),
+        svgWaterRect: document.getElementById('svg-water-rect'),
+        targetDurationHint: document.getElementById('target-duration-hint'),
+        sliderDuration: document.getElementById('slider-duration'),
+        labelDuration: document.getElementById('label-duration'),
+        btnTestSound: document.getElementById('btn-test-sound'),
+        modeRelentless: document.getElementById('mode-relentless'),
+        modeMercy: document.getElementById('mode-mercy'),
+        toggleEscalate: document.getElementById('toggle-escalate'),
+        sliderVolume: document.getElementById('slider-volume'),
+        labelVolume: document.getElementById('label-volume'),
+        sliderSensitivity: document.getElementById('slider-sensitivity'),
+        labelSensitivity: document.getElementById('label-sensitivity'),
+        btnGiveUp: document.getElementById('btn-give-up'),
+        btnHowItWorks: document.getElementById('btn-how-it-works'),
+        modalHelp: document.getElementById('modal-help'),
+        btnCloseHelp: document.getElementById('btn-close-help'),
+        btnGotIt: document.getElementById('btn-got-it'),
+        toastContainer: document.getElementById('toast-container'),
+      };
+
+      // ============================================================
+      // TOAST HELPER
+      // ============================================================
+      function showToast(message, tone) {
+        const div = document.createElement('div');
+        const toneClasses =
+          tone === 'error'
+            ? 'bg-rose-950/95 border-rose-500/60 text-rose-100'
+            : tone === 'success'
+            ? 'bg-emerald-950/95 border-emerald-500/60 text-emerald-100'
+            : 'bg-slate-900/95 border-cyan-500/50 text-slate-100';
+        div.className = `px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-semibold shadow-xl backdrop-blur-md transition-all duration-300 ${toneClasses}`;
+        div.textContent = message;
+        el.toastContainer.appendChild(div);
+        setTimeout(() => {
+          div.style.opacity = '0';
+          div.style.transform = 'translateY(-6px)';
+          setTimeout(() => div.remove(), 300);
+        }, 3200);
+      }
+
+      // ============================================================
+      // ANNOYING SOUND ENGINE (PURE WEB AUDIO API)
+      // ============================================================
+      const AudioEngine = {
+        ctx: null,
+        masterGain: null,
+        activeInterval: null,
+        activeNodes: [],
+        isPlaying: false,
+        step: 0,
+        nagIndex: 0,
+        lastNagAt: 0,
+
+        ensureContext() {
+          if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioCtx();
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.value = state.volume * 0.45;
+            this.masterGain.connect(this.ctx.destination);
+          }
+          if (this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(() => {});
+          }
+        },
+
+        setVolume(v) {
+          if (this.masterGain && this.ctx) {
+            this.masterGain.gain.setTargetAtTime(v * 0.45, this.ctx.currentTime, 0.04);
+          }
+        },
+
+        stopAll() {
+          this.isPlaying = false;
+          if (this.activeInterval) {
+            clearInterval(this.activeInterval);
+            this.activeInterval = null;
+          }
+          this.activeNodes.forEach((n) => {
+            try {
+              if (n.stop) n.stop();
+              if (n.disconnect) n.disconnect();
+            } catch (e) {}
+          });
+          this.activeNodes = [];
+          try {
+            if ('speechSynthesis' in window) {
+              window.speechSynthesis.cancel();
+            }
+          } catch (e) {}
+        },
+
+        playTone(freq, durationSec, type, volScale, detune) {
+          this.ensureContext();
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type || 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now);
+          if (detune) osc.detune.setValueAtTime(detune, now);
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.linearRampToValueAtTime(volScale || 0.5, now + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + durationSec);
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start(now);
+          osc.stop(now + durationSec + 0.02);
+        },
+
+        startAlarm(type) {
+          this.stopAll();
+          this.ensureContext();
+          this.isPlaying = true;
+          this.step = 0;
+
+          if (type === 'mosquito') {
+            // Continuous modulating high-pitched mosquito swarm
+            const now = this.ctx.currentTime;
+            const osc1 = this.ctx.createOscillator();
+            const osc2 = this.ctx.createOscillator();
+            const lfo = this.ctx.createOscillator();
+            const lfoGain = this.ctx.createGain();
+            const g = this.ctx.createGain();
+
+            osc1.type = 'sawtooth';
+            osc2.type = 'triangle';
+            osc1.frequency.setValueAtTime(2150, now);
+            osc2.frequency.setValueAtTime(2168, now);
+
+            lfo.type = 'sine';
+            lfo.frequency.setValueAtTime(9, now);
+            lfoGain.gain.setValueAtTime(220, now);
+            lfo.connect(lfoGain);
+            lfoGain.connect(osc1.frequency);
+            lfoGain.connect(osc2.frequency);
+
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(2400, now);
+            filter.Q.setValueAtTime(3.2, now);
+
+            g.gain.setValueAtTime(0.45, now);
+
+            osc1.connect(filter);
+            osc2.connect(filter);
+            filter.connect(g);
+            g.connect(this.masterGain);
+
+            osc1.start(now);
+            osc2.start(now);
+            lfo.start(now);
+
+            this.activeNodes.push(osc1, osc2, lfo, lfoGain, filter, g);
+
+            // Pitch creeps up as escalation rises
+            this.activeInterval = setInterval(() => {
+              if (!this.isPlaying || !this.ctx) return;
+              const esc = state.escalateOnStall ? state.escalation : 1.0;
+              const base = 2050 + (esc - 1) * 600 + Math.sin(Date.now() * 0.006) * 140;
+              osc1.frequency.setTargetAtTime(base, this.ctx.currentTime, 0.08);
+              osc2.frequency.setTargetAtTime(base + 19, this.ctx.currentTime, 0.08);
+            }, 120);
+            return;
+          }
+
+          // Pulsed / patterned alarms
+          const tick = () => {
+            if (!this.isPlaying) return;
+            const esc = state.escalateOnStall ? state.escalation : 1.0;
+            const pitchMult = 1 + (esc - 1) * 0.25;
+
+            if (type === 'klaxon') {
+              // Piercing smoke-detector chirp + dissonant klaxon
+              if (this.step % 2 === 0) {
+                this.playTone(3150 * pitchMult, 0.14, 'square', 0.55);
+                this.playTone(3220 * pitchMult, 0.14, 'sine', 0.35);
+              } else {
+                this.playTone(620 * pitchMult, 0.22, 'sawtooth', 0.5);
+                this.playTone(657 * pitchMult, 0.22, 'sawtooth', 0.45);
+              }
+            } else if (type === 'caralarm') {
+              const phase = Math.floor(this.step / 6) % 3;
+              if (phase === 0) {
+                // Whoop sweep
+                const f = this.step % 2 === 0 ? 920 : 1480;
+                this.playTone(f * pitchMult, 0.18, 'sawtooth', 0.55);
+              } else if (phase === 1) {
+                // Rapid horn honks
+                this.playTone(440 * pitchMult, 0.16, 'square', 0.45);
+                this.playTone(554 * pitchMult, 0.16, 'square', 0.45);
+              } else {
+                // High-low euro siren
+                const f = this.step % 2 === 0 ? 1850 : 1240;
+                this.playTone(f * pitchMult, 0.18, 'triangle', 0.6);
+              }
+            } else if (type === 'kazoo') {
+              // Nasal wobbly detuned honk
+              const notes = [370, 392, 349, 415, 360];
+              const base = notes[this.step % notes.length] * pitchMult;
+              this.playTone(base, 0.26, 'sawtooth', 0.55, 22);
+              this.playTone(base * 1.03, 0.26, 'square', 0.3, -18);
+            } else if (type === 'nag') {
+              // Irritating metronome beep + spoken nag every ~3.2s
+              this.playTone(1320 * pitchMult, 0.09, 'square', 0.35);
+              const nowMs = Date.now();
+              if (nowMs - this.lastNagAt > Math.max(1800, 3300 / esc)) {
+                this.lastNagAt = nowMs;
+                try {
+                  if ('speechSynthesis' in window && !window.speechSynthesis.speaking) {
+                    const utter = new SpeechSynthesisUtterance(
+                      NAG_LINES[this.nagIndex % NAG_LINES.length]
+                    );
+                    this.nagIndex++;
+                    utter.rate = Math.min(1.45, 1.05 + (esc - 1) * 0.2);
+                    utter.pitch = 1.1;
+                    utter.volume = Math.min(1, state.volume + 0.15);
+                    window.speechSynthesis.speak(utter);
+                  }
+                } catch (e) {}
+              }
+            }
+
+            this.step++;
+          };
+
+          tick();
+          const baseInterval = type === 'nag' ? 520 : type === 'kazoo' ? 320 : 280;
+          this.activeInterval = setInterval(tick, baseInterval);
+        },
+
+        playVictoryChime() {
+          this.stopAll();
+          this.ensureContext();
+          const notes = [523.25, 659.25, 783.99, 1046.5];
+          notes.forEach((freq, i) => {
+            setTimeout(() => {
+              this.playTone(freq, 0.45, 'triangle', 0.55);
+            }, i * 110);
+          });
+        },
+
+        preview(type) {
+          this.startAlarm(type);
+          setTimeout(() => {
+            if (!state.running) {
+              this.stopAll();
+            }
+          }, 1500);
+        }
+      };
+
+      // ============================================================
+      // CAMERA & COMPUTER VISION SIP DETECTOR
+      // ============================================================
+      let mediaStream = null;
+      let prevFrameData = null;
+      let animFrameId = null;
+      let lastLoopTime = performance.now();
+      let demoBottleTilt = 0;
+
+      async function startWebcam() {
+        stopWebcam();
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          enableDemoCam('Camera API unavailable — switched to Interactive Demo Cam.');
+          return false;
+        }
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: state.facingMode,
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+            },
+            audio: false,
+          });
+          el.webcamVideo.srcObject = mediaStream;
+          await el.webcamVideo.play();
+          state.cameraActive = true;
+          state.useDemoCam = false;
+          prevFrameData = null;
+
+          el.webcamVideo.classList.remove('hidden');
+          el.demoCanvas.classList.add('hidden');
+          el.btnFlipCamera.classList.remove('hidden');
+          el.cameraModeLabel.textContent = 'Live Webcam Active';
+          el.toggleSourceText.textContent = 'Use Demo Cam';
+          return true;
+        } catch (err) {
+          enableDemoCam('Camera blocked or not found — using Interactive Demo Cam!');
+          return false;
+        }
+      }
+
+      function stopWebcam() {
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((t) => t.stop());
+          mediaStream = null;
+        }
+        el.webcamVideo.srcObject = null;
+        state.cameraActive = false;
+      }
+
+      function enableDemoCam(toastMsg) {
+        stopWebcam();
+        state.useDemoCam = true;
+        el.webcamVideo.classList.add('hidden');
+        el.demoCanvas.classList.remove('hidden');
+        el.btnFlipCamera.classList.add('hidden');
+        el.cameraModeLabel.textContent = 'Interactive Demo Cam';
+        el.toggleSourceText.textContent = 'Try Real Camera';
+        if (toastMsg) showToast(toastMsg, 'info');
+      }
+
+      // Compute pixel delta inside the central Sip Zone of the webcam frame
+      function analyzeWebcamSipZone() {
+        if (!state.cameraActive || el.webcamVideo.readyState < 2) return 0;
+        const ctx = el.cvCanvas.getContext('2d', { willReadFrequently: true });
+        const w = el.cvCanvas.width;
+        const h = el.cvCanvas.height;
+        ctx.drawImage(el.webcamVideo, 0, 0, w, h);
+
+        // Sip zone ROI: center 54% width, middle 45% height
+        const rx = Math.floor(w * 0.23);
+        const ry = Math.floor(h * 0.22);
+        const rw = Math.floor(w * 0.54);
+        const rh = Math.floor(h * 0.50);
+
+        const imgData = ctx.getImageData(rx, ry, rw, rh).data;
+        if (!prevFrameData || prevFrameData.length !== imgData.length) {
+          prevFrameData = new Uint8ClampedArray(imgData);
+          return 0;
+        }
+
+        let diffSum = 0;
+        let activePixels = 0;
+        const totalPixels = rw * rh;
+        for (let i = 0; i < imgData.length; i += 4) {
+          const dr = Math.abs(imgData[i] - prevFrameData[i]);
+          const dg = Math.abs(imgData[i + 1] - prevFrameData[i + 1]);
+          const db = Math.abs(imgData[i + 2] - prevFrameData[i + 2]);
+          const delta = (dr + dg + db) / 3;
+          if (delta > 16) activePixels++;
+          diffSum += delta;
+        }
+
+        // Blend previous frame slowly so holding a bottle steady near mouth still registers for a moment
+        for (let i = 0; i < imgData.length; i++) {
+          prevFrameData[i] = prevFrameData[i] * 0.65 + imgData[i] * 0.35;
+        }
+
+        const avgDelta = diffSum / totalPixels;
+        const ratio = activePixels / totalPixels;
+        const rawScore = Math.min(100, avgDelta * 3.8 + ratio * 140);
+        return rawScore;
+      }
+
+      // Draw animated Demo Cam character drinking water
+      function drawDemoCam(dt) {
+        const canvas = el.demoCanvas;
+        const rect = canvas.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const targetW = Math.max(320, Math.floor(rect.width * dpr));
+        const targetH = Math.max(240, Math.floor(rect.height * dpr));
+        if (canvas.width !== targetW || canvas.height !== targetH) {
+          canvas.width = targetW;
+          canvas.height = targetH;
+        }
+
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+
+        // Smooth tilt animation when sipping
+        const targetTilt = state.isSipping ? 1 : 0;
+        demoBottleTilt += (targetTilt - demoBottleTilt) * Math.min(1, dt * 10);
+
+        // Background studio gradient
+        const grad = ctx.createRadialGradient(w * 0.5, h * 0.45, w * 0.05, w * 0.5, h * 0.5, w * 0.7);
+        grad.addColorStop(0, state.running && !state.isSipping ? '#271222' : '#0f1d33');
+        grad.addColorStop(1, '#060a14');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Subtle grid
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.06)';
+        ctx.lineWidth = 1;
+        const step = Math.floor(w / 14);
+        for (let x = 0; x < w; x += step) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, h);
+          ctx.stroke();
+        }
+        for (let y = 0; y < h; y += step) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+
+        const cx = w * 0.5;
+        const cy = h * 0.48;
+        const r = Math.min(w, h) * 0.16;
+
+        // Shoulders
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + r * 1.9, r * 1.75, r * 1.15, 0, Math.PI, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = state.isSipping ? '#22d3ee' : state.running ? '#f43f5e' : '#475569';
+        ctx.lineWidth = Math.max(2, dpr * 2);
+        ctx.stroke();
+
+        // Eyes
+        const eyeY = cy - r * 0.16;
+        const eyeOff = r * 0.34;
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(cx - eyeOff, eyeY, r * 0.11, 0, Math.PI * 2);
+        ctx.arc(cx + eyeOff, eyeY, r * 0.11, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Mouth (open drinking vs stressed)
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = Math.max(2, dpr * 2.2);
+        ctx.beginPath();
+        if (state.isSipping) {
+          ctx.fillStyle = '#06b6d4';
+          ctx.arc(cx, cy + r * 0.34, r * 0.15, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (state.running) {
+          // Stressed wavy mouth
+          ctx.arc(cx, cy + r * 0.48, r * 0.22, Math.PI * 1.15, Math.PI * 1.85);
+          ctx.stroke();
+        } else {
+          // Calm smile
+          ctx.arc(cx, cy + r * 0.22, r * 0.24, Math.PI * 0.15, Math.PI * 0.85);
+          ctx.stroke();
+        }
+
+        // Animated Water Bottle moving up to mouth
+        const pctLeft = Math.max(0, 1 - state.drunkSeconds / state.targetSeconds);
+        const bx = cx + r * (1.25 - demoBottleTilt * 0.72);
+        const by = cy + r * (1.05 - demoBottleTilt * 0.78);
+        const angle = -demoBottleTilt * 1.05;
+
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(angle);
+
+        const bw = r * 0.56;
+        const bh = r * 1.15;
+
+        // Bottle outline
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = Math.max(2, dpr * 1.8);
+        ctx.beginPath();
+        ctx.roundRect(-bw / 2, -bh / 2, bw, bh, bw * 0.2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Water inside bottle
+        if (pctLeft > 0.01) {
+          const waterH = (bh - 6) * pctLeft;
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.82)';
+          ctx.beginPath();
+          ctx.roundRect(-bw / 2 + 3, bh / 2 - 3 - waterH, bw - 6, waterH, bw * 0.12);
+          ctx.fill();
+        }
+
+        // Bottle neck
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(-bw * 0.22, -bh / 2 - bh * 0.14, bw * 0.44, bh * 0.14);
+        ctx.restore();
+
+
+      }
+
+      // ============================================================
+      // MAIN ANIMATION & SESSION LOOP
+      // ============================================================
+      function formatTime(sec) {
+        const s = Math.max(0, Math.floor(sec));
+        const m = Math.floor(s / 60);
+        const rem = s % 60;
+        return `${String(m).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+      }
+
+      function updateUI() {
+        const pct = Math.min(100, (state.drunkSeconds / Math.max(1, state.targetSeconds)) * 100);
+        const drunkMl = Math.round((pct / 100) * state.targetMl);
+        const remMl = Math.max(0, state.targetMl - drunkMl);
+
+        el.progressLabel.textContent = `${drunkMl} / ${state.targetMl} ml drunk`;
+        el.progressPct.textContent = `${Math.round(pct)}%`;
+        el.progressBarFill.style.width = `${pct}%`;
+
+        el.statRemaining.textContent = `${remMl} ml`;
+        el.statSipTime.textContent = `${state.drunkSeconds.toFixed(1)}s`;
+        el.statStallTime.textContent = `${state.stallSeconds.toFixed(1)}s`;
+        el.timerDisplay.textContent = formatTime(state.elapsedSeconds);
+        el.streakBadge.textContent = `${state.bottlesFinished} ${state.bottlesFinished === 1 ? 'bottle' : 'bottles'} finished`;
+
+        // Update mini SVG bottle water height (y from 10 to 56)
+        const fillH = Math.max(0, (1 - pct / 100) * 46);
+        el.svgWaterRect.setAttribute('y', String(56 - fillH));
+        el.svgWaterRect.setAttribute('height', String(fillH));
+
+        // Motion meter
+        el.motionMeterFill.style.width = `${Math.min(100, Math.round(state.motionLevel))}%`;
+
+        // Stage & HUD states
+        el.stageFrame.classList.remove('stage-alarm', 'stage-sipping', 'stage-victory');
+
+        if (state.finished) {
+          el.stageFrame.classList.add('stage-victory');
+          el.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0';
+          el.statusTitle.textContent = 'Bottle Finished — Alarm Silenced!';
+          el.statusSubtitle.textContent = `Hydrated ${state.targetMl} ml in ${formatTime(state.elapsedSeconds)}.`;
+          el.alarmPill.classList.add('hidden');
+          el.escalationBadge.classList.add('hidden');
+        } else if (state.running) {
+          const alarmAudible =
+            state.alarmMode === 'relentless' || (state.alarmMode === 'mercy' && !state.isSipping);
+
+          if (state.isSipping) {
+            el.stageFrame.classList.add('stage-sipping');
+            el.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shrink-0';
+            el.statusTitle.textContent =
+              state.alarmMode === 'mercy'
+                ? 'Sipping detected — alarm paused!'
+                : 'Sipping detected — keep going to 100%!';
+            el.statusSubtitle.textContent = `${remMl} ml left until sweet silence.`;
+            el.sipZoneBox.className =
+              'w-[54%] max-w-[260px] aspect-[5/4] rounded-2xl border-2 border-cyan-400 bg-cyan-500/20 flex flex-col items-center justify-between p-2 transition-all duration-150';
+            el.sipZoneTag.textContent = 'SIPPING DETECTED ✓';
+            el.sipZoneTag.className =
+              'px-2 py-0.5 rounded bg-cyan-500 text-[10px] font-extrabold uppercase tracking-wider text-slate-950';
+            el.sipZonePrompt.textContent = 'Keep drinking!';
+          } else {
+            el.stageFrame.classList.add('stage-alarm');
+            el.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0';
+            el.statusTitle.textContent = 'DRINK YOUR WATER! ALARM ACTIVE';
+            el.statusSubtitle.textContent = state.useDemoCam
+              ? 'Hold "Hold to Sip" or Spacebar to drink.'
+              : 'Raise your glass/bottle inside the Sip Zone.';
+            el.sipZoneBox.className =
+              'w-[54%] max-w-[260px] aspect-[5/4] rounded-2xl border-2 border-dashed border-rose-500 bg-rose-500/15 flex flex-col items-center justify-between p-2 transition-all duration-150';
+            el.sipZoneTag.textContent = 'NOT DRINKING — ALARM ON';
+            el.sipZoneTag.className =
+              'px-2 py-0.5 rounded bg-rose-600 text-[10px] font-extrabold uppercase tracking-wider text-white';
+            el.sipZonePrompt.textContent = state.useDemoCam ? 'Hold Spacebar / Button!' : 'Drink now!';
+          }
+
+          if (alarmAudible) {
+            el.alarmPill.classList.remove('hidden');
+          } else {
+            el.alarmPill.classList.add('hidden');
+          }
+
+          if (state.escalateOnStall && state.escalation > 1.05) {
+            el.escalationBadge.classList.remove('hidden');
+            el.escalationBadge.textContent = `ESCALATING x${state.escalation.toFixed(1)}`;
+          } else {
+            el.escalationBadge.classList.add('hidden');
+          }
+        } else {
+          el.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-500 shrink-0';
+          el.statusTitle.textContent = 'Ready to supervise hydration';
+          el.statusSubtitle.textContent = 'Choose your vessel & alarm, then hit Start Watching.';
+          el.alarmPill.classList.add('hidden');
+          el.escalationBadge.classList.add('hidden');
+          el.sipZoneBox.className =
+            'w-[54%] max-w-[260px] aspect-[5/4] rounded-2xl border-2 border-dashed border-cyan-400/60 bg-cyan-500/5 flex flex-col items-center justify-between p-2 transition-all duration-150';
+          el.sipZoneTag.textContent = 'SIP ZONE — RAISE BOTTLE HERE';
+          el.sipZoneTag.className =
+            'px-2 py-0.5 rounded bg-slate-950/85 text-[10px] font-extrabold uppercase tracking-wider text-cyan-300';
+          el.sipZonePrompt.textContent = 'Position face & cup inside box';
+        }
+      }
+
+      function loop(now) {
+        const dt = Math.min(0.1, (now - lastLoopTime) / 1000);
+        lastLoopTime = now;
+
+        // 1. Detect sipping
+        let camMotion = 0;
+        if (state.cameraActive && !state.useDemoCam) {
+          camMotion = analyzeWebcamSipZone();
+        } else if (state.manualSipHeld) {
+          camMotion = 88;
+        }
+
+        // Smooth motion meter
+        state.motionLevel = state.motionLevel * 0.72 + camMotion * 0.28;
+
+        // Threshold inversely related to sensitivity (higher sensitivity = lower threshold)
+        const threshold = Math.max(8, 100 - state.sensitivity) * 0.65;
+        const detected = state.manualSipHeld || (state.cameraActive && !state.useDemoCam && state.motionLevel >= threshold);
+
+        if (state.running && !state.finished) {
+          state.isSipping = detected;
+          state.elapsedSeconds += dt;
+
+          if (state.isSipping) {
+            state.drunkSeconds = Math.min(state.targetSeconds, state.drunkSeconds + dt);
+            state.escalation = Math.max(1.0, state.escalation - dt * 0.25);
+
+            // Mercy mode pauses alarm while sipping
+            if (state.alarmMode === 'mercy' && AudioEngine.isPlaying) {
+              AudioEngine.stopAll();
+            }
+          } else {
+            state.stallSeconds += dt;
+            if (state.escalateOnStall) {
+              state.escalation = Math.min(2.5, 1.0 + state.stallSeconds * 0.06);
+            }
+            // Resume alarm if stopped
+            if (!AudioEngine.isPlaying) {
+              AudioEngine.startAlarm(state.soundType);
+            }
+          }
+
+          // Check completion
+          if (state.drunkSeconds >= state.targetSeconds) {
+            completeSession();
+          }
+        } else {
+          state.isSipping = false;
+        }
+
+        // 2. Render Demo Cam if active
+        if (state.useDemoCam || !state.cameraActive) {
+          drawDemoCam(dt);
+        }
+
+        // 3. Update HUD
+        updateUI();
+
+        animFrameId = requestAnimationFrame(loop);
+      }
+
+      // ============================================================
+      // SESSION CONTROLS
+      // ============================================================
+      async function startSession() {
+        AudioEngine.ensureContext();
+
+        if (!state.useDemoCam && !state.cameraActive) {
+          await startWebcam();
+        }
+
+        state.running = true;
+        state.finished = false;
+        state.drunkSeconds = 0;
+        state.elapsedSeconds = 0;
+        state.stallSeconds = 0;
+        state.escalation = 1.0;
+
+        el.victoryOverlay.classList.add('hidden');
+        el.btnHoldSip.disabled = false;
+        el.btnGiveUp.classList.remove('hidden');
+        el.btnStartLabel.textContent = 'Restart Session';
+        el.btnStartStop.className =
+          'flex-1 py-3.5 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-extrabold text-base transition active:scale-[0.99] flex items-center justify-center gap-2';
+
+        AudioEngine.startAlarm(state.soundType);
+        showToast('Alarm active! Finish the entire drink to shut it off.', 'error');
+      }
+
+      function completeSession() {
+        state.running = false;
+        state.finished = true;
+        state.isSipping = false;
+        state.manualSipHeld = false;
+        state.bottlesFinished += 1;
+
+        try {
+          localStorage.setItem('sipsiren_streak', String(state.bottlesFinished));
+        } catch (e) {}
+
+        AudioEngine.playVictoryChime();
+
+        el.btnHoldSip.disabled = true;
+        el.btnGiveUp.classList.add('hidden');
+        el.btnStartLabel.textContent = 'Start Watching & Sound Alarm';
+        el.btnStartStop.className =
+          'flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white font-extrabold text-base shadow-lg shadow-rose-500/25 transition active:scale-[0.99] flex items-center justify-center gap-2';
+
+        el.victorySummary.textContent = `You finished the entire ${state.targetMl} ml ${VESSELS[state.vesselKey].name.toLowerCase()} in ${formatTime(state.elapsedSeconds)} (stalled ${state.stallSeconds.toFixed(1)}s). Sweet silence!`;
+        el.victoryOverlay.classList.remove('hidden');
+
+        if (typeof confetti === 'function') {
+          confetti({
+            particleCount: 95,
+            spread: 75,
+            origin: { y: 0.6 },
+            colors: ['#06b6d4', '#34d399', '#38bdf8', '#f8fafc'],
+          });
+        }
+        showToast('Hydration complete! Alarm silenced.', 'success');
+      }
+
+      function giveUpSession() {
+        state.running = false;
+        state.finished = false;
+        state.isSipping = false;
+        state.manualSipHeld = false;
+        state.drunkSeconds = 0;
+        state.elapsedSeconds = 0;
+        state.stallSeconds = 0;
+        state.escalation = 1.0;
+
+        AudioEngine.stopAll();
+        el.btnHoldSip.disabled = true;
+        el.btnGiveUp.classList.add('hidden');
+        el.btnStartLabel.textContent = 'Start Watching & Sound Alarm';
+        el.btnStartStop.className =
+          'flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white font-extrabold text-base shadow-lg shadow-rose-500/25 transition active:scale-[0.99] flex items-center justify-center gap-2';
+
+        showToast('Alarm silenced. Your kidneys are disappointed in you.', 'info');
+      }
+
+      // ============================================================
+      // EVENT LISTENERS
+      // ============================================================
+      el.btnStartStop.addEventListener('click', () => {
+        startSession();
+      });
+
+      el.btnGiveUp.addEventListener('click', () => {
+        giveUpSession();
+      });
+
+      el.btnDrinkAgain.addEventListener('click', () => {
+        el.victoryOverlay.classList.add('hidden');
+        state.finished = false;
+        state.drunkSeconds = 0;
+        state.elapsedSeconds = 0;
+        state.stallSeconds = 0;
+        startSession();
+      });
+
+      // Vessel buttons
+      document.querySelectorAll('.vessel-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const key = btn.getAttribute('data-vessel');
+          const v = VESSELS[key];
+          if (!v) return;
+          state.vesselKey = key;
+          state.targetMl = v.ml;
+          state.targetSeconds = v.seconds;
+          el.sliderDuration.value = String(v.seconds);
+          el.labelDuration.textContent = `${v.seconds} sec`;
+          el.targetDurationHint.textContent = `~${v.seconds}s of sipping`;
+
+          document.querySelectorAll('.vessel-btn').forEach((b) => {
+            const active = b.getAttribute('data-vessel') === key;
+            b.className = active
+              ? 'vessel-btn rounded-xl p-2.5 border-2 border-cyan-400 bg-cyan-500/10 text-left transition'
+              : 'vessel-btn rounded-xl p-2.5 border border-slate-700 bg-slate-950/70 hover:border-cyan-500/60 text-left transition';
+          });
+          updateUI();
+        });
+      });
+
+      // Duration slider
+      el.sliderDuration.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        state.targetSeconds = val;
+        el.labelDuration.textContent = `${val} sec`;
+        el.targetDurationHint.textContent = `~${val}s of sipping`;
+      });
+
+      // Sound picker buttons
+      document.querySelectorAll('.sound-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const type = btn.getAttribute('data-sound');
+          state.soundType = type;
+
+          document.querySelectorAll('.sound-btn').forEach((b) => {
+            const active = b.getAttribute('data-sound') === type;
+            const badge = b.querySelector('.sound-active-badge');
+            b.className = active
+              ? 'sound-btn flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border-2 border-rose-500 bg-rose-500/10 text-left transition'
+              : 'sound-btn flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-600 text-left transition';
+            if (badge) badge.classList.toggle('hidden', !active);
+          });
+
+          // If alarm is currently running, switch sound live
+          if (state.running && AudioEngine.isPlaying) {
+            AudioEngine.startAlarm(state.soundType);
+          }
+        });
+      });
+
+      // Test Sound button
+      el.btnTestSound.addEventListener('click', () => {
+        AudioEngine.preview(state.soundType);
+      });
+
+      // Alarm mode toggles
+      function setAlarmMode(mode) {
+        state.alarmMode = mode;
+        const isRelentless = mode === 'relentless';
+        el.modeRelentless.className = isRelentless
+          ? 'px-3 py-2 rounded-xl border-2 border-rose-500 bg-rose-500/10 text-left transition'
+          : 'px-3 py-2 rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-600 text-left transition';
+        el.modeMercy.className = !isRelentless
+          ? 'px-3 py-2 rounded-xl border-2 border-cyan-400 bg-cyan-500/10 text-left transition'
+          : 'px-3 py-2 rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-600 text-left transition';
+      }
+      el.modeRelentless.addEventListener('click', () => setAlarmMode('relentless'));
+      el.modeMercy.addEventListener('click', () => setAlarmMode('mercy'));
+
+      // Escalate toggle
+      el.toggleEscalate.addEventListener('change', (e) => {
+        state.escalateOnStall = e.target.checked;
+      });
+
+      // Volume slider
+      el.sliderVolume.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value, 10);
+        state.volume = pct / 100;
+        el.labelVolume.textContent = pct >= 95 ? `${pct}% (BRUTAL)` : `${pct}%`;
+        AudioEngine.setVolume(state.volume);
+      });
+
+      // Sensitivity slider
+      el.sliderSensitivity.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        state.sensitivity = val;
+        const tier = val >= 75 ? 'High' : val <= 35 ? 'Low' : 'Medium';
+        el.labelSensitivity.textContent = `${tier} (${val}%)`;
+      });
+
+      // Toggle Demo Cam vs Real Webcam
+      el.btnToggleSource.addEventListener('click', async () => {
+        if (state.useDemoCam) {
+          await startWebcam();
+        } else {
+          enableDemoCam('Switched to Interactive Demo Cam.');
+        }
+      });
+
+      // Flip front/back camera on mobile
+      el.btnFlipCamera.addEventListener('click', async () => {
+        state.facingMode = state.facingMode === 'user' ? 'environment' : 'user';
+        el.webcamVideo.classList.toggle('mirror-video', state.facingMode === 'user');
+        await startWebcam();
+      });
+
+      // Hold-to-Sip button (Mouse + Touch + Keyboard Spacebar)
+      function setManualSip(active) {
+        if (!state.running) return;
+        state.manualSipHeld = active;
+        el.btnHoldSip.classList.toggle('bg-cyan-500', active);
+        el.btnHoldSip.classList.toggle('text-slate-950', active);
+      }
+
+      el.btnHoldSip.addEventListener('mousedown', () => setManualSip(true));
+      el.btnHoldSip.addEventListener('mouseup', () => setManualSip(false));
+      el.btnHoldSip.addEventListener('mouseleave', () => setManualSip(false));
+      el.btnHoldSip.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        setManualSip(true);
+      });
+      el.btnHoldSip.addEventListener('touchend', () => setManualSip(false));
+      el.btnHoldSip.addEventListener('touchcancel', () => setManualSip(false));
+
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && state.running && !e.repeat) {
+          e.preventDefault();
+          setManualSip(true);
+        }
+      });
+      window.addEventListener('keyup', (e) => {
+        if (e.code === 'Space') {
+          setManualSip(false);
+        }
+      });
+
+      // Help modal
+      el.btnHowItWorks.addEventListener('click', () => el.modalHelp.classList.remove('hidden'));
+      el.btnCloseHelp.addEventListener('click', () => el.modalHelp.classList.add('hidden'));
+      el.btnGotIt.addEventListener('click', () => el.modalHelp.classList.add('hidden'));
+      el.modalHelp.addEventListener('click', (e) => {
+        if (e.target === el.modalHelp) el.modalHelp.classList.add('hidden');
+      });
+
+      // ============================================================
+      // INIT
+      // ============================================================
+      if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+      }
+      // Start in clean visual Demo Cam standby so viewport is never blank
+      state.useDemoCam = false;
+      updateUI();
+      animFrameId = requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
